@@ -5,6 +5,8 @@
 
 export type TurretsType = "dca" | "stop_loss";
 
+export type ScheduledFrequency = "daily" | "weekly" | "monthly";
+
 export interface TurretsDeployment {
   id: string;
   ownerPublicKey: string;
@@ -76,6 +78,24 @@ export async function deployTurretsFunction(params: {
   return parseJson(res) as Promise<TurretsDeployment>;
 }
 
+/** Create a scheduled recurring payment via POST /api/turrets/dca */
+export async function createScheduledDcaPayment(params: {
+  ownerPublicKey: string;
+  recipient: string;
+  amount: string | number;
+  asset: "XLM" | "USDC" | string;
+  assetIssuer?: string | null;
+  frequency: ScheduledFrequency;
+}) {
+  const res = await fetch(`${apiBase()}/api/turrets/dca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  return parseJson(res) as Promise<TurretsDeployment>;
+}
+
 export async function listTurretsFunctions(ownerPublicKey: string) {
   const res = await fetch(
     `${apiBase()}/api/turrets?ownerPublicKey=${encodeURIComponent(ownerPublicKey)}`
@@ -84,6 +104,52 @@ export async function listTurretsFunctions(ownerPublicKey: string) {
   return parseJson(res) as Promise<TurretsDeployment[]>;
 }
 
+export interface TurretsDcaRequest {
+  ownerPublicKey: string;
+  intervalMinutes: number;
+  amountQuote: number;
+  quoteAssetCode?: string;
+  quoteAssetIssuer?: string | null;
+}
+
+export interface TurretsStopLossRequest {
+  ownerPublicKey: string;
+  thresholdPrice: number;
+  amountSell: number;
+  sellAssetCode?: string;
+  sellAssetIssuer?: string | null;
+  cooldownMinutes?: number;
+}
+
+export interface TurretsAutomationResponse extends TurretsDeployment {
+  turretSignerAddress: string;
+}
+
+export async function createDcaAutomation(params: TurretsDcaRequest) {
+  const res = await fetch(`${apiBase()}/api/turrets/dca`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  return parseJson(res) as Promise<TurretsAutomationResponse>;
+}
+
+export async function createStopLossAutomation(params: TurretsStopLossRequest) {
+  const res = await fetch(`${apiBase()}/api/turrets/stop-loss`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  return parseJson(res) as Promise<TurretsAutomationResponse>;
+}
+
+export async function getTurretSignerAddress(): Promise<string> {
+  const res = await fetch(`${apiBase()}/api/turrets/signer`);
+  const data = (await parseJson(res)) as { turretSignerAddress: string };
+  return data.turretSignerAddress;
+}
 export async function getTurretsHistory(id: string) {
   const res = await fetch(`${apiBase()}/api/turrets/${encodeURIComponent(id)}/history`);
   return parseJson(res) as Promise<TurretsExecutionHistory[]>;
@@ -91,7 +157,7 @@ export async function getTurretsHistory(id: string) {
 
 export async function pauseTurretsFunction(id: string) {
   const res = await fetch(`${apiBase()}/api/turrets/${encodeURIComponent(id)}/pause`, {
-    method: "POST",
+    method: "PATCH",
   });
 
   return parseJson(res) as Promise<TurretsDeployment>;
@@ -103,4 +169,12 @@ export async function resumeTurretsFunction(id: string) {
   });
 
   return parseJson(res) as Promise<TurretsDeployment>;
+}
+
+export async function cancelTurretsFunction(id: string) {
+  const res = await fetch(`${apiBase()}/api/turrets/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+  return parseJson(res) as Promise<{ id: string; status: string; cancelledAt: string }>;
 }

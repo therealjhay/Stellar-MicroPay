@@ -2,6 +2,7 @@ import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import Dashboard from "@/pages/dashboard";
+import { clearPriceCache } from "@/lib/price";
 
 jest.mock("next/router", () => ({
   useRouter: () => ({ push: jest.fn(), query: {} }),
@@ -32,6 +33,12 @@ jest.mock("@/lib/stellar", () => ({
   getXLMBalance: jest.fn().mockResolvedValue("500.0000000"),
   getAccountReserveInfo: jest.fn().mockResolvedValue(null),
   getUSDCBalance: jest.fn().mockResolvedValue(null),
+  getBalances: jest.fn().mockResolvedValue([
+    { assetCode: "XLM", asset: "XLM", balance: "500.0000000" },
+  ]),
+  getFriendBotFunding: jest.fn().mockResolvedValue(undefined),
+  waitForAccountFunding: jest.fn().mockResolvedValue(true),
+  fetchAllPayments: jest.fn().mockResolvedValue([]),
   getRecentPaymentsForStats: jest.fn().mockResolvedValue([]),
   getRecentPaymentsForSparkline: jest.fn().mockResolvedValue([]),
   getPaymentHistory: jest.fn().mockResolvedValue({ records: [], hasMore: false }),
@@ -50,6 +57,15 @@ function mockDashboardFetch(
 ): jest.Mock {
   return jest.fn((input: RequestInfo | URL) => {
     const url = String(input);
+
+    // Stellar Expert is the primary price source (lib/price). Return a
+    // shape with no usable price so tests exercise the CoinGecko path.
+    if (url.includes("stellar.expert")) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response);
+    }
 
     if (url.includes("coingecko")) {
       return coinGeckoResponse;
@@ -85,6 +101,9 @@ function mockDashboardFetch(
 
 describe("Dashboard USD price display", () => {
   beforeEach(() => {
+    // lib/price caches per currency for 60s — reset between tests so each
+    // case performs its own mocked fetch.
+    clearPriceCache();
     mockUseWallet.mockReturnValue({
       publicKey: PUBLIC_KEY,
       connectWallet: jest.fn(),
